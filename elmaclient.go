@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
+	str "strings"
 
 	resty "gopkg.in/resty.v1"
 )
@@ -16,6 +18,13 @@ type ElmaClient struct {
 	applicationToken string
 	auth             auth
 	secret           string
+}
+
+type ElmaRequest struct {
+	Method   string
+	Resource *url.URL
+	Headers  map[string]string
+	Body     string
 }
 
 type auth struct {
@@ -97,8 +106,39 @@ func (c *ElmaClient) setupReq(headers map[string]string, body interface{}) (req 
 	return
 }
 
-func (c *ElmaClient) signReq(req *resty.Request, verb string) error {
+func (c *ElmaClient) signReq(req *ElmaRequest, signedHeaders []string) error {
+	var v = str.ToUpper(req.Method)
+	var r = req.Resource.Fragment
+	var q = str.Trim(u.RawQuery, " ")
+	var h = normalizeHeaders(req.Header)
 	return nil
+}
+
+func normalizeHeaders(headers map[string]string) (res string, err error) {
+	var keys []string
+	nh := map[string]string{}
+
+	for k, v := range headers {
+		nk := normalizeKey(k)
+		nv := normalizeValue(k)
+		keys = append(keys, k)
+		nh[nk] = nv
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		res += fmt.Sprintf("%v:%v\n", k, nh[k])
+	}
+
+	return
+}
+
+func normalizeKey(key string) string {
+	return str.ToLower(key)
+}
+
+func normalizeValue(value string) string {
+	str.Trim(value, " \n")
 }
 
 func main() {
