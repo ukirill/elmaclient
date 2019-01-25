@@ -16,9 +16,8 @@ type HMACSigner struct {
 	secret []byte
 }
 
-// New HMACSigner with shared secret
-func New(secret []byte) *HMACSigner {
-	hmac := hmac.New(sha256.New, secret)
+// NewHmac HMACSigner with shared secret
+func NewHmac(secret []byte) *HMACSigner {
 	return &HMACSigner{
 		secret,
 	}

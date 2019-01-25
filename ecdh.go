@@ -5,13 +5,20 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 )
 
 // EcdhInfo provides shared secret agreement
 type EcdhInfo struct {
 	curve   elliptic.Curve
 	private []byte
+}
+
+// NewEcdh creates new EcdhInfo struct. If curve is undefined (nil), inits struct with P256
+func NewEcdh(curve elliptic.Curve) *EcdhInfo {
+	if curve == nil {
+		curve = elliptic.P256()
+	}
+	return &EcdhInfo{curve, nil}
 }
 
 // GeneratePubKey generates hex-encoded ECDH public key in uncompressed format
@@ -27,13 +34,13 @@ func (e *EcdhInfo) GeneratePubKey() string {
 
 // GenerateSharedSecret generates SHA256-hashed-then-hex-encoded string with shared secret
 // receiving hex-encoded public key from other side of handshaking in uncompressed format
-func (e *EcdhInfo) GenerateSharedSecret(sharedHex string) (string, error) {
+func (e *EcdhInfo) GenerateSharedSecret(sharedHex string) ([]byte, error) {
 	sharedKey, err := hex.DecodeString(sharedHex)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	x, y := elliptic.Unmarshal(e.curve, sharedKey)
 	keyX, _ := e.curve.ScalarMult(x, y, e.private)
 	hashKey := sha256.Sum256(keyX.Bytes())
-	return fmt.Sprintf("%x", hashKey), nil
+	return hashKey[:], nil
 }
