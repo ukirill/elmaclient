@@ -10,3 +10,10 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+
+# Module files
+*.mod
+*.sum
+
+# Local configs
+*-config.toml

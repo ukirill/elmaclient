@@ -1,4 +1,4 @@
-package main
+package elmaclient
 
 import (
 	"crypto/elliptic"
@@ -6,6 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 )
+
+// SharedSecretGenerator for generating symmetric shared
+// secret in unsecure enviroment
+type SharedSecretGenerator interface {
+	GeneratePubKey() []byte
+	GenerateSharedSecret([]byte)
+}
 
 // EcdhInfo provides shared secret agreement
 type EcdhInfo struct {
@@ -22,14 +29,14 @@ func NewEcdh(curve elliptic.Curve) *EcdhInfo {
 }
 
 // GeneratePubKey generates hex-encoded ECDH public key in uncompressed format
-func (e *EcdhInfo) GeneratePubKey() string {
+func (e *EcdhInfo) GeneratePubKey() []byte {
 	priv, x, y, err := elliptic.GenerateKey(e.curve, rand.Reader)
 	if err != nil {
 		panic(err)
 	}
 	e.private = priv
 	pub := elliptic.Marshal(e.curve, x, y)
-	return hex.EncodeToString(pub)
+	return pub
 }
 
 // GenerateSharedSecret generates SHA256-hashed-then-hex-encoded string with shared secret

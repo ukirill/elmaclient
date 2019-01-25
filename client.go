@@ -1,4 +1,4 @@
-package main
+package elmaclient
 
 import (
 	"crypto/sha256"
@@ -14,11 +14,12 @@ import (
 
 // Service headers name consts
 const (
-	AuthInfo      = "Auth-Info"
-	SignedHeaders = "Signed-Headers"
-	ContentType   = "Content-Type"
-	comma         = ","
-	newline       = "\n"
+	AuthInfo         = "Auth-Info"
+	SignedHeaders    = "Signed-Headers"
+	ContentType      = "Content-Type"
+	ApplicationToken = "ApplicationToken"
+	comma            = ","
+	newline          = "\n"
 )
 
 // Client is basic REST client for ELMA Public API
@@ -30,6 +31,13 @@ type Client struct {
 	ecdh             *EcdhInfo
 	hmac             *HMACSigner
 	httpClient       *http.Client
+}
+
+type auth struct {
+	SessToken string `json:"SessionToken"`
+	AuthToken string `json:"AuthToken"`
+	UserID    int    `json:"CurrentUserId"`
+	Lang      string `json:"Lang"`
 }
 
 // New Client for ELMA Public API
@@ -62,9 +70,9 @@ func (c *Client) Auth(login, password string) error {
 	}
 	u := c.BaseURL.ResolveReference(authURL)
 	headers := map[string]string{
-		"Content-Type":     "application/json",
-		"ApplicationToken": c.applicationToken,
-		AuthInfo:           pubkey,
+		"Content-Type":   "application/json",
+		ApplicationToken: c.applicationToken,
+		AuthInfo:         hex.EncodeToString(pubkey),
 	}
 	b := strings.NewReader(fmt.Sprintf("\"%s\"", password))
 
