@@ -131,12 +131,12 @@ func addHeaders(headers map[string]string, httpHeader http.Header) {
 func (c *Client) do(req *http.Request, v interface{}) (*http.Response, error) {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "doing request")
 	}
 	defer resp.Body.Close()
 
 	err = json.NewDecoder(resp.Body).Decode(v)
-	return resp, err
+	return resp, errors.Wrap(err, "decoding response body")
 }
 
 func (c *Client) sign(req *http.Request) {

@@ -15,22 +15,23 @@ type SecretGenerator interface {
 	GenerateSharedSecret([]byte) []byte
 }
 
-// EcdhInfo provides shared secret agreement
-type EcdhInfo struct {
+// Ecdh provides shared secret agreement
+type Ecdh struct {
 	curve   elliptic.Curve
 	private []byte
 }
 
-// NewEcdh creates new EcdhInfo struct. If curve is undefined (nil), inits struct with P256
-func NewEcdh(curve elliptic.Curve) *EcdhInfo {
+// NewEcdh creates new struct. If curve is undefined (nil),
+// inits struct with P256 by default
+func NewEcdh(curve elliptic.Curve) *Ecdh {
 	if curve == nil {
 		curve = elliptic.P256()
 	}
-	return &EcdhInfo{curve, nil}
+	return &Ecdh{curve, nil}
 }
 
 // GeneratePubKey generates hex-encoded ECDH public key in uncompressed format
-func (e *EcdhInfo) GeneratePubKey() ([]byte, error) {
+func (e *Ecdh) GeneratePubKey() ([]byte, error) {
 	priv, x, y, err := elliptic.GenerateKey(e.curve, rand.Reader)
 	if err != nil {
 		return nil, errors.Wrap(err, "generate pubkey")
@@ -42,7 +43,7 @@ func (e *EcdhInfo) GeneratePubKey() ([]byte, error) {
 
 // GenerateSharedSecret generates SHA256-hashed-then-hex-encoded string with shared secret
 // receiving hex-encoded public key from other side of handshaking in uncompressed format
-func (e *EcdhInfo) GenerateSharedSecret(shared []byte) []byte {
+func (e *Ecdh) GenerateSharedSecret(shared []byte) []byte {
 	x, y := elliptic.Unmarshal(e.curve, shared)
 	keyX, _ := e.curve.ScalarMult(x, y, e.private)
 	hashKey := sha256.Sum256(keyX.Bytes())
