@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 // Service headers name consts
@@ -18,6 +20,8 @@ const (
 	SignedHeaders    = "Signed-Headers"
 	ContentType      = "Content-Type"
 	ApplicationToken = "ApplicationToken"
+	SessionToken     = "SessionToken"
+	AuthToken        = "AuthToken"
 	comma            = ","
 	newline          = "\n"
 )
@@ -28,8 +32,8 @@ type Client struct {
 
 	applicationToken string
 	auth             *auth
-	ecdh             *EcdhInfo
-	hmac             *HMACSigner
+	ecdh             SecretGenerator
+	hmac             Signer
 	httpClient       *http.Client
 }
 
@@ -62,7 +66,10 @@ func New(baseURL, appToken string) (*Client, error) {
 
 //Auth existing Client to get all tokens and shared secret for signing if available
 func (c *Client) Auth(login, password string) error {
-	pubkey := c.ecdh.GeneratePubKey()
+	pubkey, err := c.ecdh.GeneratePubKey()
+	if err != nil {
+		return errors.Wrap(err, "generate pubkey before auth")
+	}
 
 	authURL := &url.URL{
 		Path:     "API/REST/Authorization/LoginWith",
@@ -78,7 +85,7 @@ func (c *Client) Auth(login, password string) error {
 
 	req, err := http.NewRequest("POST", u.String(), b)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "creating auth request")
 	}
 	addHeaders(headers, req.Header)
 
@@ -91,10 +98,11 @@ func (c *Client) Auth(login, password string) error {
 	c.auth = a
 
 	sharedkey := resp.Header.Get(AuthInfo)
-	secret, err := c.ecdh.GenerateSharedSecret(sharedkey)
+	byteskey, err := hex.DecodeString(sharedkey)
 	if err != nil {
-		return fmt.Errorf("couldnt generate shared secret, %s", err)
+		return errors.Wrap(err, "decoding hex sharedkey from header")
 	}
+	secret := c.ecdh.GenerateSharedSecret(byteskey)
 
 	c.hmac = NewHmac(secret)
 
@@ -103,6 +111,8 @@ func (c *Client) Auth(login, password string) error {
 
 //Do signed request to ELMA. Stores unmarshalled json response to v
 func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
+	var sh = []string{AuthToken, SessionToken, ApplicationToken}
+	req.Header[SignedHeaders] = append(req.Header[SignedHeaders], sh...)
 	c.sign(req)
 	resp, err := c.do(req, v)
 	return resp, err

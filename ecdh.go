@@ -4,14 +4,15 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
+
+	"github.com/pkg/errors"
 )
 
-// SharedSecretGenerator for generating symmetric shared
+// SecretGenerator for generating symmetric shared
 // secret in unsecure enviroment
-type SharedSecretGenerator interface {
-	GeneratePubKey() []byte
-	GenerateSharedSecret([]byte)
+type SecretGenerator interface {
+	GeneratePubKey() ([]byte, error)
+	GenerateSharedSecret([]byte) []byte
 }
 
 // EcdhInfo provides shared secret agreement
@@ -29,25 +30,21 @@ func NewEcdh(curve elliptic.Curve) *EcdhInfo {
 }
 
 // GeneratePubKey generates hex-encoded ECDH public key in uncompressed format
-func (e *EcdhInfo) GeneratePubKey() []byte {
+func (e *EcdhInfo) GeneratePubKey() ([]byte, error) {
 	priv, x, y, err := elliptic.GenerateKey(e.curve, rand.Reader)
 	if err != nil {
-		panic(err)
+		return nil, errors.Wrap(err, "generate pubkey")
 	}
 	e.private = priv
 	pub := elliptic.Marshal(e.curve, x, y)
-	return pub
+	return pub, nil
 }
 
 // GenerateSharedSecret generates SHA256-hashed-then-hex-encoded string with shared secret
 // receiving hex-encoded public key from other side of handshaking in uncompressed format
-func (e *EcdhInfo) GenerateSharedSecret(sharedHex string) ([]byte, error) {
-	sharedKey, err := hex.DecodeString(sharedHex)
-	if err != nil {
-		return nil, err
-	}
-	x, y := elliptic.Unmarshal(e.curve, sharedKey)
+func (e *EcdhInfo) GenerateSharedSecret(shared []byte) []byte {
+	x, y := elliptic.Unmarshal(e.curve, shared)
 	keyX, _ := e.curve.ScalarMult(x, y, e.private)
 	hashKey := sha256.Sum256(keyX.Bytes())
-	return hashKey[:], nil
+	return hashKey[:]
 }
