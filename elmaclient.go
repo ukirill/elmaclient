@@ -108,9 +108,9 @@ func (c *ElmaClient) setupReq(headers map[string]string, body interface{}) (req 
 
 func (c *ElmaClient) signReq(req *ElmaRequest, signedHeaders []string) error {
 	var v = str.ToUpper(req.Method)
-	var r = req.Resource.Fragment
+	var r = req.Resource
 	var q = str.Trim(u.RawQuery, " ")
-	var h = normalizeHeaders(req.Header)
+	var h = normalizeHeaders(req)
 	return nil
 }
 
