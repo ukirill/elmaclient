@@ -40,7 +40,7 @@ type Client struct {
 type auth struct {
 	SessToken string `json:"SessionToken"`
 	AuthToken string `json:"AuthToken"`
-	UserID    int    `json:"CurrentUserId"`
+	UserID    string `json:"CurrentUserId"`
 	Lang      string `json:"Lang"`
 }
 
@@ -91,8 +91,11 @@ func (c *Client) Auth(login, password string) error {
 
 	a := &auth{}
 	resp, err := c.do(req, a)
-	if err != nil || resp.StatusCode > 400 {
-		return fmt.Errorf("error in auth process, code: %v, error: %s", resp.StatusCode, err)
+	if err != nil {
+		return errors.Wrap(err, "error in auth process")
+	}
+	if resp.StatusCode > 400 {
+		return fmt.Errorf("error in auth process, code: %v, error: %v", resp.StatusCode, resp.Status)
 	}
 
 	c.auth = a
@@ -112,6 +115,13 @@ func (c *Client) Auth(login, password string) error {
 //Do signed request to ELMA. Stores unmarshalled json response to v
 func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 	var sh = []string{AuthToken, SessionToken, ApplicationToken}
+	headers := map[string]string{
+		ApplicationToken:  c.applicationToken,
+		SessionToken:      c.auth.SessToken,
+		AuthToken:         c.auth.AuthToken,
+		"WebData-Version": "2.0",
+	}
+	addHeaders(headers, req.Header)
 	req.Header[SignedHeaders] = append(req.Header[SignedHeaders], sh...)
 	c.sign(req)
 	resp, err := c.do(req, v)
@@ -200,6 +210,9 @@ func normalizeValue(value string) string {
 }
 
 func contentHash(req *http.Request) (res string) {
+	if req.Body == nil {
+		return
+	}
 	if b, err := req.GetBody(); err == nil {
 		bytes, err := ioutil.ReadAll(b)
 		if err == nil {
