@@ -1,7 +1,9 @@
 package elmaclient
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -14,7 +16,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Service headers name consts
+// Service headers name and other service consts
 const (
 	AuthInfo         = "Auth-Info"
 	SignedHeaders    = "Signed-Headers"
@@ -22,6 +24,8 @@ const (
 	ApplicationToken = "ApplicationToken"
 	SessionToken     = "SessionToken"
 	AuthToken        = "AuthToken"
+	WebDataVer       = "WebData-Version"
+	AppJSON          = "application/json"
 	comma            = ","
 	newline          = "\n"
 )
@@ -77,7 +81,7 @@ func (c *Client) Auth(login, password string) error {
 	}
 	u := c.BaseURL.ResolveReference(authURL)
 	headers := map[string]string{
-		"Content-Type":   "application/json",
+		ContentType:      AppJSON,
 		ApplicationToken: c.applicationToken,
 		AuthInfo:         hex.EncodeToString(pubkey),
 	}
@@ -116,12 +120,13 @@ func (c *Client) Auth(login, password string) error {
 func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 	var sh = []string{AuthToken, SessionToken, ApplicationToken}
 	headers := map[string]string{
-		ApplicationToken:  c.applicationToken,
-		SessionToken:      c.auth.SessToken,
-		AuthToken:         c.auth.AuthToken,
-		"WebData-Version": "2.0",
+		ApplicationToken: c.applicationToken,
+		SessionToken:     c.auth.SessToken,
+		AuthToken:        c.auth.AuthToken,
+		WebDataVer:       "2.0",
 	}
 	addHeaders(headers, req.Header)
+	defaultContType(req)
 	req.Header[SignedHeaders] = append(req.Header[SignedHeaders], sh...)
 	c.sign(req)
 	resp, err := c.do(req, v)
@@ -130,12 +135,16 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 
 func addHeaders(headers map[string]string, httpHeader http.Header) {
 	for k, v := range headers {
-		if h, ok := httpHeader[k]; ok {
-			httpHeader[k] = append(h, v)
-		} else {
-			httpHeader.Add(k, v)
-		}
+		httpHeader.Add(k, v)
 	}
+}
+
+func defaultContType(req *http.Request) bool {
+	if v := req.Header.Get(ContentType); v == "" {
+		req.Header.Set(ContentType, AppJSON)
+		return true
+	}
+	return false
 }
 
 func (c *Client) do(req *http.Request, v interface{}) (*http.Response, error) {
@@ -144,9 +153,18 @@ func (c *Client) do(req *http.Request, v interface{}) (*http.Response, error) {
 		return nil, errors.Wrap(err, "doing request")
 	}
 	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return resp, errors.Wrap(err, "reading all bytes from resp.Body")
+	}
+	//WCF sends UTF8-BOM sometimes, cutting it
+	body = bytes.TrimPrefix(body, []byte("\xef\xbb\xbf"))
+	err = json.Unmarshal(body, v)
+	if err != nil {
+		return resp, errors.Wrap(err, "decoding response body")
+	}
 
-	err = json.NewDecoder(resp.Body).Decode(v)
-	return resp, errors.Wrap(err, "decoding response body")
+	return resp, nil
 }
 
 func (c *Client) sign(req *http.Request) {
@@ -160,7 +178,7 @@ func (c *Client) sign(req *http.Request) {
 
 	req.Header.Set(SignedHeaders, strings.Join(sh, comma))
 	b := c.hmac.Sign(m)
-	signature := strings.ToLower(hex.EncodeToString(b))
+	signature := base64.StdEncoding.EncodeToString(b)
 	req.Header.Set(AuthInfo, signature)
 }
 
@@ -170,14 +188,13 @@ func normalizeHeaders(headers http.Header) (string, []string) {
 	signedHeaders := signedHeaders(headers)
 
 	for _, k := range signedHeaders {
-		var v []string
-		var ok bool
-		if v, ok = headers[k]; !ok {
+		var v string
+		if v = headers.Get(k); v == "" {
 			continue
 		}
 		nk := normalizeKey(k)
-		nv := normalizeValue(strings.Join(v, comma))
-		keys = append(keys, k)
+		nv := normalizeValue(v)
+		keys = append(keys, nk)
 		nh[nk] = nv
 	}
 
@@ -190,12 +207,10 @@ func normalizeHeaders(headers http.Header) (string, []string) {
 }
 
 func signedHeaders(headers http.Header) (signedHeaders []string) {
-	var v []string
-	var ok bool
-	if v, ok = headers[SignedHeaders]; !ok {
+	if h := headers.Get(SignedHeaders); h == "" {
 		return
 	}
-	for _, sh := range v {
+	for _, sh := range headers[SignedHeaders] {
 		signedHeaders = append(signedHeaders, strings.Split(sh, comma)...)
 	}
 	return
