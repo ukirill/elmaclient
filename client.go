@@ -1,3 +1,8 @@
+// Package elmaclient provides client for Elma Public API
+//
+// It implements basic functionality
+// for authenticating and requesting Elma Public API.
+// It also supports request signing transparently.
 package elmaclient
 
 import (
@@ -49,26 +54,26 @@ type auth struct {
 }
 
 // New Client for ELMA Public API
-func New(baseURL, appToken string) (*Client, error) {
+func New(sg SecretGenerator, cl *http.Client, baseURL, appToken string) (*Client, error) {
 	var u *url.URL
 	var err error
 	if u, err = url.Parse(baseURL); err != nil {
 		return nil, err
 	}
 
-	e := NewEcdh(nil)
-	h := http.DefaultClient
 	c := &Client{
 		BaseURL: u,
 
 		applicationToken: appToken,
-		ecdh:             e,
-		httpClient:       h,
+		ecdh:             sg,
+		httpClient:       cl,
 	}
 	return c, nil
 }
 
-//Auth existing Client to get all tokens and shared secret for signing if available
+// Auth existing Client to get all tokens and shared secret for signing if available.
+// Uses SecretGenerator provided in method "New".
+// Stores auth state in Client struct for future requests.
 func (c *Client) Auth(login, password string) error {
 	pubkey, err := c.ecdh.GeneratePubKey()
 	if err != nil {
@@ -116,7 +121,11 @@ func (c *Client) Auth(login, password string) error {
 	return nil
 }
 
-//Do signed request to ELMA. Stores unmarshalled json response to v
+// Do signed request to ELMA.
+// Adds mandatory service headers for authentication
+// and authorization. Uses Signer provided in method "New"
+// Adds "application/json" content-type by default, could be overrided in req
+// Stores unmarshalled json response to v
 func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 	var sh = []string{AuthToken, SessionToken, ApplicationToken}
 	headers := map[string]string{
