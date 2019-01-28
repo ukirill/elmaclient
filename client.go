@@ -114,8 +114,10 @@ func (c *Client) Auth(login, password string) error {
 	if err != nil {
 		return errors.Wrap(err, "decoding hex sharedkey from header")
 	}
-	secret := c.ecdh.GenerateSharedSecret(byteskey)
-
+	secret, err := c.ecdh.GenerateSharedSecret(byteskey)
+	if err != nil {
+		return errors.Wrap(err, "generatin shared secret")
+	}
 	c.hmac = NewHmac(secret)
 
 	return nil

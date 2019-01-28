@@ -4,6 +4,8 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
+	"math/big"
 
 	"github.com/pkg/errors"
 )
@@ -12,7 +14,7 @@ import (
 // secret in unsecure enviroment
 type SecretGenerator interface {
 	GeneratePubKey() ([]byte, error)
-	GenerateSharedSecret([]byte) []byte
+	GenerateSharedSecret([]byte) ([]byte, error)
 }
 
 // Ecdh provides shared secret agreement
@@ -41,11 +43,19 @@ func (e *Ecdh) GeneratePubKey() ([]byte, error) {
 	return pub, nil
 }
 
-// GenerateSharedSecret generates SHA256-hashed-then-hex-encoded string with shared secret
-// receiving hex-encoded public key from other side of handshaking in uncompressed format
-func (e *Ecdh) GenerateSharedSecret(shared []byte) []byte {
+// GenerateSharedSecret generates SHA256-hashed byte array
+// with shared secret receiving  public key from other side
+// of handshaking in uncompressed format
+func (e *Ecdh) GenerateSharedSecret(shared []byte) ([]byte, error) {
 	x, y := elliptic.Unmarshal(e.curve, shared)
+	if !e.sharedKeyValid(x, y) {
+		return nil, fmt.Errorf("invalid shared key received")
+	}
 	keyX, _ := e.curve.ScalarMult(x, y, e.private)
 	hashKey := sha256.Sum256(keyX.Bytes())
-	return hashKey[:]
+	return hashKey[:], nil
+}
+
+func (e *Ecdh) sharedKeyValid(x, y *big.Int) bool {
+	return x != nil && y != nil && e.curve.IsOnCurve(x, y)
 }
