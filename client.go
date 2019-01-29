@@ -125,10 +125,13 @@ func (c *Client) Auth(login, password string) error {
 
 // Do signed request to ELMA.
 // Adds mandatory service headers for authentication
-// and authorization. Uses Signer provided in method "New"
-// Adds "application/json" content-type by default, could be overrided in req
+// and authorization. Uses Signer provided in method "New".
+// Adds "application/json" content-type by default, could be overrided in req.
+// Resolves url got from req based on BaseURL of Client.
 // Stores unmarshalled json response to v
 func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
+	c.resolveAddr(req)
+
 	var sh = []string{AuthToken, SessionToken, ApplicationToken}
 	headers := map[string]string{
 		ApplicationToken: c.applicationToken,
@@ -141,6 +144,7 @@ func (c *Client) Do(req *http.Request, v interface{}) (*http.Response, error) {
 	req.Header[SignedHeaders] = append(req.Header[SignedHeaders], sh...)
 	c.sign(req)
 	resp, err := c.do(req, v)
+
 	return resp, err
 }
 
@@ -156,6 +160,10 @@ func defaultContType(req *http.Request) bool {
 		return true
 	}
 	return false
+}
+
+func (c *Client) resolveAddr(req *http.Request) {
+	req.URL = c.BaseURL.ResolveReference(req.URL)
 }
 
 func (c *Client) do(req *http.Request, v interface{}) (*http.Response, error) {
@@ -179,6 +187,9 @@ func (c *Client) do(req *http.Request, v interface{}) (*http.Response, error) {
 }
 
 func (c *Client) sign(req *http.Request) {
+	if c.hmac == nil {
+		return
+	}
 	m := strings.ToUpper(req.Method) + newline
 	m += req.URL.Path + newline
 	m += req.URL.RawQuery + newline
@@ -193,6 +204,8 @@ func (c *Client) sign(req *http.Request) {
 	req.Header.Set(AuthInfo, signature)
 }
 
+// normalizeHeaders returns normalized string of header:value pairs
+// and list of this headers
 func normalizeHeaders(headers http.Header) (string, []string) {
 	var keys []string
 	nh := map[string]string{}

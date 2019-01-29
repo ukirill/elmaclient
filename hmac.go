@@ -11,7 +11,8 @@ type Signer interface {
 	Check(message string, signature []byte) bool
 }
 
-// HMACSigner for signing and checking signature
+// HMACSigner for signing and checking signature.
+// Uses HMAC-SHA256
 type HMACSigner struct {
 	secret []byte
 }
@@ -33,17 +34,5 @@ func (h *HMACSigner) Sign(message string) []byte {
 //Check signature of message
 func (h *HMACSigner) Check(message string, signature []byte) bool {
 	var s = h.Sign(message)
-	return equal(s, signature)
-}
-
-func equal(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, v := range a {
-		if v != b[i] {
-			return false
-		}
-	}
-	return true
+	return hmac.Equal(s, signature)
 }
