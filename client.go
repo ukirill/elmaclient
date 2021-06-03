@@ -58,7 +58,7 @@ type auth struct {
 }
 
 // New Client for ELMA Public API
-func New(sg SecretGenerator, sf SignerFabric, cl *http.Client, baseURL, appToken string) (*Client, error) {
+func newClient(sg SecretGenerator, sf SignerFabric, cl *http.Client, baseURL, appToken string) (*Client, error) {
 	var u *url.URL
 	var err error
 	if u, err = url.Parse(baseURL); err != nil {
@@ -74,6 +74,15 @@ func New(sg SecretGenerator, sf SignerFabric, cl *http.Client, baseURL, appToken
 		signerFabric:     sf,
 	}
 	return c, nil
+}
+
+func New(baseUrl, applicationToken string) (*Client, error) {
+	sg := NewEcdh(nil)
+	sf := func(secret []byte) Signer {
+		return NewHmac(secret)
+	}
+	cl := http.DefaultClient
+	return newClient(sg, sf, cl, baseUrl, applicationToken)
 }
 
 // Auth existing Client to get all tokens and shared secret for signing if available.

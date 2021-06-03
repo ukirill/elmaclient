@@ -61,7 +61,7 @@ func TestClient_Auth(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(&generator{}, signerFabric, server.Client(), server.URL, applicationToken)
+	client, err := newClient(&generator{}, signerFabric, server.Client(), server.URL, applicationToken)
 	assert.NoError(t, err)
 	err = client.Auth(login, password)
 	assert.NoError(t, err)
