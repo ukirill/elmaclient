@@ -1,32 +1,29 @@
 package elmaclient
 
 import (
-	"fmt"
+	"encoding/json"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
-)
 
-var (
-	mux    *http.ServeMux
-	server *httptest.Server
-	client *Client
-)
-
-const (
-	apptoken = "123"
+	"github.com/stretchr/testify/assert"
 )
 
 type signer struct {
+	CheckResult bool
 }
 
-func (s *signer) Sign(message string) []byte {
+func (s *signer) Sign(_ string) []byte {
 	return []byte("SIGNATURE")
 }
 
-func (s *signer) Check(message string, signature []byte) bool {
-	return true
+func (s *signer) Check(_ string, _ []byte) bool {
+	return s.CheckResult
+}
+
+func signerFabric(_ []byte) Signer {
+	return &signer{CheckResult: true}
 }
 
 type generator struct {
@@ -36,26 +33,36 @@ func (g *generator) GeneratePubKey() ([]byte, error) {
 	return []byte("PUBKEY"), nil
 }
 
-func (g *generator) GenerateSharedSecret(pub []byte) ([]byte, error) {
+func (g *generator) GenerateSharedSecret(_ []byte) ([]byte, error) {
 	return []byte("SECRET"), nil
 }
 
-func setup() func() {
-	mux = http.NewServeMux()
-	server = httptest.NewServer(mux)
+func TestClient_Auth(t *testing.T) {
+	login := "testuser"
+	password := "testpass"
+	applicationToken := "123"
 
-	client, _ = New(&generator{}, http.DefaultClient, server.URL, apptoken)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.Equal(t, applicationToken, r.Header.Get("ApplicationToken"))
+		assert.Equal(t, login, r.URL.Query()["username"][0])
 
-	return func() {
-		server.Close()
-	}
-}
+		bytes, err := ioutil.ReadAll(r.Body)
+		defer r.Body.Close()
+		assert.NoError(t, err)
+		assert.Equal(t, "\""+password+"\"", string(bytes))
 
-func TestDo(*testing.T) {
-	baseURL, _ := url.Parse("http://www.eee.com:4300")
-	u := &url.URL{
-		Path: "/api/rest/",
-	}
-	fmt.Println(baseUrl.ResolveReference(u))
+		w.WriteHeader(200)
+		bytes, _ = json.Marshal(&auth{
+			SessToken: "sessiontoken",
+			AuthToken: "authtoken",
+		})
+		_, _ = w.Write(bytes)
+	}))
+	defer server.Close()
 
+	client, err := New(&generator{}, signerFabric, server.Client(), server.URL, applicationToken)
+	assert.NoError(t, err)
+	err = client.Auth(login, password)
+	assert.NoError(t, err)
 }

@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 )
 
-// Signer is inteface for signing and checkin digital signature of messages
+// Signer is interface for signing and checkin digital signature of messages
 type Signer interface {
 	Sign(message string) []byte
 	Check(message string, signature []byte) bool
@@ -26,9 +26,9 @@ func NewHmac(secret []byte) *HMACSigner {
 
 //Sign message
 func (h *HMACSigner) Sign(message string) []byte {
-	hmac := hmac.New(sha256.New, h.secret)
-	hmac.Write([]byte(message))
-	return hmac.Sum(nil)
+	hash := hmac.New(sha256.New, h.secret)
+	hash.Write([]byte(message))
+	return hash.Sum(nil)
 }
 
 //Check signature of message

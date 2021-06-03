@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -44,7 +45,10 @@ type Client struct {
 	ecdh             SecretGenerator
 	hmac             Signer
 	httpClient       *http.Client
+	signerFabric     SignerFabric
 }
+
+type SignerFabric func(secret []byte) Signer
 
 type auth struct {
 	SessToken string `json:"SessionToken"`
@@ -54,7 +58,7 @@ type auth struct {
 }
 
 // New Client for ELMA Public API
-func New(sg SecretGenerator, cl *http.Client, baseURL, appToken string) (*Client, error) {
+func New(sg SecretGenerator, sf SignerFabric, cl *http.Client, baseURL, appToken string) (*Client, error) {
 	var u *url.URL
 	var err error
 	if u, err = url.Parse(baseURL); err != nil {
@@ -67,6 +71,7 @@ func New(sg SecretGenerator, cl *http.Client, baseURL, appToken string) (*Client
 		applicationToken: appToken,
 		ecdh:             sg,
 		httpClient:       cl,
+		signerFabric:     sf,
 	}
 	return c, nil
 }
@@ -103,22 +108,22 @@ func (c *Client) Auth(login, password string) error {
 	if err != nil {
 		return errors.Wrap(err, "error in auth process")
 	}
-	if resp.StatusCode > 400 {
+	if resp.StatusCode != 200 {
 		return fmt.Errorf("error in auth process, code: %v, error: %v", resp.StatusCode, resp.Status)
 	}
 
 	c.auth = a
 
-	sharedkey := resp.Header.Get(AuthInfo)
-	byteskey, err := hex.DecodeString(sharedkey)
+	sharedKey := resp.Header.Get(AuthInfo)
+	bytesKey, err := hex.DecodeString(sharedKey)
 	if err != nil {
 		return errors.Wrap(err, "decoding hex sharedkey from header")
 	}
-	secret, err := c.ecdh.GenerateSharedSecret(byteskey)
+	secret, err := c.ecdh.GenerateSharedSecret(bytesKey)
 	if err != nil {
-		return errors.Wrap(err, "generatin shared secret")
+		return errors.Wrap(err, "generating shared secret")
 	}
-	c.hmac = NewHmac(secret)
+	c.hmac = c.signerFabric(secret)
 
 	return nil
 }
@@ -171,7 +176,9 @@ func (c *Client) do(req *http.Request, v interface{}) (*http.Response, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "doing request")
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return resp, errors.Wrap(err, "reading all bytes from resp.Body")
@@ -253,9 +260,9 @@ func contentHash(req *http.Request) (res string) {
 		return
 	}
 	if b, err := req.GetBody(); err == nil {
-		bytes, err := ioutil.ReadAll(b)
+		body, err := ioutil.ReadAll(b)
 		if err == nil {
-			hash := sha256.Sum256(bytes)
+			hash := sha256.Sum256(body)
 			res = strings.ToLower(hex.EncodeToString(hash[:]))
 		}
 	}
