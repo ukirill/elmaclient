@@ -76,6 +76,7 @@ func newClient(sg SecretGenerator, sf SignerFabric, cl *http.Client, baseURL, ap
 	return c, nil
 }
 
+// New Client for ELMA Public API with headers and body signature support
 func New(baseUrl, applicationToken string) (*Client, error) {
 	sg := NewEcdh(nil)
 	sf := func(secret []byte) Signer {

@@ -14,7 +14,7 @@ func main() {
 	baseURL := "http:"  // Insert real base URL
 	c, err := client.New(baseURL, appToken)
 	if err != nil {
-		log.Fatalf("couldnt create client, %s", err)
+		log.Fatalf("could not create client, %s", err)
 	}
 
 	// Insert real credentials
